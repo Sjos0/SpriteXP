@@ -54,14 +54,10 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.GridOn
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Icon
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import androidx.annotation.DrawableRes
+import io.github.sjos0.spritexp.R
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.sjos0.spritexp.ui.theme.PixelifyFontFamily
 import androidx.compose.runtime.LaunchedEffect
@@ -121,12 +117,12 @@ private val LocalWorkColors = staticCompositionLocalOf { DarkWorkColors }
 private val workColors: WorkColors
     @Composable get() = LocalWorkColors.current
 
-private enum class WorkTab(val label: String, val icon: ImageVector) {
-    AJUSTES("Ajustes", Icons.Filled.Tune),
-    ANIMACAO("Animar", Icons.Filled.Timer),
-    PALETA("Paleta", Icons.Filled.Palette),
-    EXPORTAR("Exportar", Icons.Filled.Download),
-    ANALISADOR("Sheet", Icons.Filled.GridOn)
+private enum class WorkTab(val label: String, @DrawableRes val iconRes: Int) {
+    AJUSTES("Ajustes", R.drawable.ic_ajustes),
+    ANIMACAO("Animar", R.drawable.ic_animar),
+    PALETA("Paleta", R.drawable.ic_paleta),
+    EXPORTAR("Exportar", R.drawable.ic_exportar),
+    ANALISADOR("Sheet", R.drawable.ic_sheet)
 }
 
 /**
@@ -903,10 +899,11 @@ private fun ToolDock(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
+                // PNG pixel art: sem tint, para não recolorir o ícone nem na seleção.
                 Icon(
-                    imageVector = tool.icon,
+                    painter = painterResource(tool.iconRes),
                     contentDescription = tool.label,
-                    tint = if (isSelected) Color.White else workColors.text,
+                    tint = Color.Unspecified,
                     modifier = Modifier.size(22.dp)
                 )
                 Text(
