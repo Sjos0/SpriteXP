@@ -1,6 +1,5 @@
 package io.github.sjos0.spritexp.data.pipeline
 
-import kotlin.math.sqrt
 
 /**
  * Extração automática de paleta por median cut.
@@ -22,7 +21,17 @@ object PaletteExtractor {
         maxColors: Int,
         chromaKeyArgb: Int? = null,
         chromaTolerancePct: Float = 0f
-    ): List<Int> {
+    ): List<Int> = extractFor(
+        argbPixels,
+        maxColors,
+        chromaKeyArgb?.let { ChromaSpec(keyArgb = it, distanceTolerance = chromaTolerancePct) }
+    )
+
+    /**
+     * Mesmo critério de fundo do conversor: a chave é a mesma [ChromaSpec] usada em [PixelArtCore].
+     * Assim a paleta automática nunca reintroduz uma cor que a chave já removeu.
+     */
+    fun extractFor(argbPixels: IntArray, maxColors: Int, chroma: ChromaSpec?): List<Int> {
         val wanted = maxColors.coerceIn(2, 256)
         val step = maxOf(1, argbPixels.size / MAX_SAMPLE)
 
@@ -32,7 +41,7 @@ object PaletteExtractor {
             val p = argbPixels[i]
             i += step
             if (alphaOf(p) < 128) continue
-            if (chromaKeyArgb != null && isChroma(p, chromaKeyArgb, chromaTolerancePct)) continue
+            if (chroma != null && chroma.isKeyed(p)) continue
             samples.add(p)
         }
         if (samples.isEmpty()) return emptyList()
@@ -49,15 +58,9 @@ object PaletteExtractor {
         return boxes.map { it.average() }.distinct()
     }
 
-    /** Mesma fórmula de distância usada no chroma key do conversor. */
-    fun isChroma(pixel: Int, key: Int, tolerancePct: Float): Boolean {
-        val maxDist = (tolerancePct / 100f) * 441.67f
-        val dr = channel(pixel, 0) - channel(key, 0)
-        val dg = channel(pixel, 1) - channel(key, 1)
-        val db = channel(pixel, 2) - channel(key, 2)
-        val dist = sqrt((dr * dr + dg * dg + db * db).toDouble()).toFloat()
-        return dist <= maxDist
-    }
+    /** Compatibilidade: delega ao mesmo critério de [ChromaSpec] (distância RGB). */
+    fun isChroma(pixel: Int, key: Int, tolerancePct: Float): Boolean =
+        ChromaSpec(keyArgb = key, distanceTolerance = tolerancePct).isKeyed(pixel)
 
     private fun alphaOf(p: Int): Int = (p ushr 24) and 0xFF
 

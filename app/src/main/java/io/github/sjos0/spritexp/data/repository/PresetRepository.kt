@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.toArgb
 import io.github.sjos0.spritexp.data.storage.SpriteXpStorage
 import io.github.sjos0.spritexp.domain.model.ChromaMode
 import io.github.sjos0.spritexp.domain.model.DitherMode
+import io.github.sjos0.spritexp.domain.model.KeyEdgeMode
 import io.github.sjos0.spritexp.domain.model.PalettePreset
 import io.github.sjos0.spritexp.domain.model.PixelArtSettings
 import io.github.sjos0.spritexp.domain.model.SettingsPreset
@@ -67,6 +68,11 @@ class PresetRepository(private val context: Context) {
         put("palettePreset", s.palettePreset.name)
         put("ditherMode", s.ditherMode.name)
         put("maxAutoColors", s.maxAutoColors)
+        put("keyEdgeMode", s.keyEdgeMode.name)
+        put("eyedropRadius", s.eyedropRadius)
+        put("chromaDespillStrength", s.chromaDespillStrength.toDouble())
+        put("matteErode", s.matteErode)
+        put("matteDilate", s.matteDilate)
     }
 
     private fun settingsFromJson(o: JSONObject): PixelArtSettings {
@@ -90,7 +96,13 @@ class PresetRepository(private val context: Context) {
             edgeEnhance = o.optDouble("edgeEnhance", d.edgeEnhance.toDouble()).toFloat(),
             palettePreset = enumOr(o.optString("palettePreset"), d.palettePreset),
             ditherMode = enumOr(o.optString("ditherMode"), d.ditherMode),
-            maxAutoColors = o.optInt("maxAutoColors", d.maxAutoColors)
+            maxAutoColors = o.optInt("maxAutoColors", d.maxAutoColors),
+            // Presets antigos não têm o campo: caem no modo Duro, que é o comportamento de sempre.
+            keyEdgeMode = enumOr(o.optString("keyEdgeMode"), d.keyEdgeMode),
+            eyedropRadius = o.optInt("eyedropRadius", d.eyedropRadius).coerceIn(0, 3),
+            chromaDespillStrength = o.optDouble("chromaDespillStrength", d.chromaDespillStrength.toDouble()).toFloat().coerceIn(0f, 1f),
+            matteErode = o.optInt("matteErode", d.matteErode).coerceIn(0, 2),
+            matteDilate = o.optInt("matteDilate", d.matteDilate).coerceIn(0, 2)
         )
     }
 
