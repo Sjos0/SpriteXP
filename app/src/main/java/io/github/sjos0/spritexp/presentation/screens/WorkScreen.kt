@@ -182,6 +182,9 @@ fun WorkScreen(
     onDeletePreset: (String) -> Unit,
     onApplyPreset: (String) -> Unit,
     onShowAbout: () -> Unit,
+    showMatte: Boolean = false,
+    onToggleMatte: () -> Unit = {},
+    onDetectBackground: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     CompositionLocalProvider(LocalWorkColors provides if (isDarkTheme) DarkWorkColors else LightWorkColors) {
@@ -277,7 +280,10 @@ fun WorkScreen(
                         picking = picking,
                         onTogglePicking = { picking = !picking },
                         pickTarget = pickTarget,
-                        onPickTargetChange = { pickTarget = it }
+                        onPickTargetChange = { pickTarget = it },
+                        showMatte = showMatte,
+                        onToggleMatte = onToggleMatte,
+                        onDetectBackground = onDetectBackground
                     )
                     PresetsSection(
                         presets = presets,
@@ -960,7 +966,10 @@ private fun AdjustmentsPanel(
     picking: Boolean,
     onTogglePicking: () -> Unit,
     pickTarget: PickTarget,
-    onPickTargetChange: (PickTarget) -> Unit
+    onPickTargetChange: (PickTarget) -> Unit,
+    showMatte: Boolean,
+    onToggleMatte: () -> Unit,
+    onDetectBackground: () -> Unit
 ) {
     val extrasFull = settings.extraChromaColors.size >= MAX_EXTRA_KEYS
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1043,6 +1052,17 @@ private fun AdjustmentsPanel(
                     }
                 }
             }
+            XpButton(
+                text = "Detectar fundo",
+                onClick = onDetectBackground,
+                modifier = Modifier.fillMaxWidth(),
+                testTag = "work_detect_background"
+            )
+            XpRadioButton(
+                selected = showMatte,
+                onClick = onToggleMatte,
+                label = if (showMatte) "Ver matte: ligado (P/B)" else "Ver matte (P/B)"
+            )
             XpSlider(
                 label = "Raio do conta-gotas",
                 value = settings.eyedropRadius.toFloat(),
@@ -1121,7 +1141,30 @@ private fun AdjustmentsPanel(
             XpRadioButton(
                 selected = settings.chromaDespill,
                 onClick = { onSettingsChange { it.copy(chromaDespill = !it.chromaDespill) } },
-                label = "Remover vazamento de verde"
+                label = "Remover vazamento da cor de fundo"
+            )
+            if (settings.chromaDespill) {
+                XpSlider(
+                    label = "Intensidade do vazamento",
+                    value = settings.chromaDespillStrength * 100f,
+                    onValueChange = { v -> onSettingsChange { it.copy(chromaDespillStrength = (v / 100f).coerceIn(0f, 1f)) } },
+                    valueRange = 0f..100f,
+                    displayFormatter = { "${it.roundToInt()}%" }
+                )
+            }
+            XpSlider(
+                label = "Erosão do matte",
+                value = settings.matteErode.toFloat(),
+                onValueChange = { v -> onSettingsChange { it.copy(matteErode = v.roundToInt().coerceIn(0, 2)) } },
+                valueRange = 0f..2f,
+                displayFormatter = { "${it.roundToInt()} px" }
+            )
+            XpSlider(
+                label = "Dilatação do matte",
+                value = settings.matteDilate.toFloat(),
+                onValueChange = { v -> onSettingsChange { it.copy(matteDilate = v.roundToInt().coerceIn(0, 2)) } },
+                valueRange = 0f..2f,
+                displayFormatter = { "${it.roundToInt()} px" }
             )
         }
 

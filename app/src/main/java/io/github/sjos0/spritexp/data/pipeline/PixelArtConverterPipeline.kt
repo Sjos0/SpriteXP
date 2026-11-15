@@ -30,7 +30,11 @@ class PixelArtConverterPipeline : PixelArtConverterUseCase {
         chromaFeather: Float,
         chromaDespill: Boolean,
         extraChromaColorsInt: IntArray,
-        keyEdgeSoft: Boolean
+        keyEdgeSoft: Boolean,
+        despillStrength: Float,
+        matteErode: Int,
+        matteDilate: Int,
+        matteView: Boolean
     ): Bitmap = withContext(Dispatchers.Default) {
         val scaled = Bitmap.createScaledBitmap(source, targetWidth, targetHeight, false)
         val w = scaled.width
@@ -58,7 +62,11 @@ class PixelArtConverterPipeline : PixelArtConverterUseCase {
             brightness = brightness,
             contrast = contrast,
             edgeEnhance = edgeEnhance,
-            ditherModeName = ditherModeName
+            ditherModeName = ditherModeName,
+            despillStrength = despillStrength,
+            erode = matteErode,
+            dilate = matteDilate,
+            matteView = matteView
         )
         val palette = if (paletteColorsInt.isNotEmpty()) paletteColorsInt.toIntArray() else PixelArtCore.DEFAULT_PALETTE
         val out = PixelArtCore.render(pixels, w, h, opts, palette)

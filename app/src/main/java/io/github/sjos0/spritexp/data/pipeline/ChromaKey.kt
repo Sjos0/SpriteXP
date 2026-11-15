@@ -164,10 +164,64 @@ object ChromaKey {
         return (0xFF shl 24) or (reds[mid] shl 16) or (greens[mid] shl 8) or blues[mid]
     }
 
-    /** Despill: limita G a max(R,B) quando G é o canal dominante. */
-    fun despill(r: Float, g: Float, b: Float): FloatArray {
-        val m = max(r, b)
-        return if (g > m) floatArrayOf(r, m, b) else floatArrayOf(r, g, b)
+    /**
+     * Despill pela direção da cor-chave.
+     * Canal de spill = componente da chave com pelo menos metade do máximo: verde → G; magenta → R e B.
+     * O limite é o maior canal que não é spill. strength 0 = sem efeito; 1 = corta o spill até o limite.
+     * Com chave verde e strength 1 é o mesmo resultado de antes: G = min(G, max(R, B)).
+     */
+    fun despill(r: Float, g: Float, b: Float, keyArgb: Int = 0xFF00FF00.toInt(), strength: Float = 1f): FloatArray {
+        val out = floatArrayOf(r, g, b)
+        if (strength <= 0f) return out
+        val key = intArrayOf((keyArgb shr 16) and 0xFF, (keyArgb shr 8) and 0xFF, keyArgb and 0xFF)
+        val keyMax = max(key[0], max(key[1], key[2]))
+        if (keyMax == 0) return out
+        val spill = BooleanArray(3) { key[it] * 2 >= keyMax }
+        var limit = -1f
+        for (c in 0..2) if (!spill[c]) limit = max(limit, out[c])
+        if (limit < 0f) return out // todos os canais são spill: nada a limitar
+        val k = strength.coerceIn(0f, 1f)
+        for (c in 0..2) {
+            if (spill[c] && out[c] > limit) out[c] -= k * (out[c] - limit)
+        }
+        return out
+    }
+
+    /**
+     * Cor dominante da borda (anel de [ring] pixels), para o botão "Detectar fundo".
+     * Agrupa em bins de 4 bits por canal, pega o bin mais frequente e devolve a mediana dele.
+     * Retorna null se nenhuma cor cobrir pelo menos [minShare] das bordas opacas.
+     */
+    fun dominantBorderColor(pixels: IntArray, w: Int, h: Int, ring: Int = 2, minShare: Float = 0.25f): Pair<Int, Float>? {
+        if (w <= 0 || h <= 0) return null
+        val rr = ring.coerceAtLeast(1)
+        val border = ArrayList<Int>()
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                if (x < rr || y < rr || x >= w - rr || y >= h - rr) {
+                    val p = pixels[y * w + x]
+                    if (((p ushr 24) and 0xFF) > 30) border.add(p)
+                }
+            }
+        }
+        if (border.isEmpty()) return null
+        val counts = HashMap<Int, Int>()
+        for (p in border) {
+            val bin = binOf(p)
+            counts[bin] = (counts[bin] ?: 0) + 1
+        }
+        val top = counts.maxByOrNull { it.value } ?: return null
+        val share = top.value.toFloat() / border.size
+        if (share < minShare) return null
+        val members = border.filter { binOf(it) == top.key }
+        return medianArgb(members.toIntArray()) to share
+    }
+
+    private fun binOf(p: Int): Int {
+        val r = (p shr 16) and 0xFF
+        val g = (p shr 8) and 0xFF
+        val b = p and 0xFF
+        return ((r shr 4) shl 8) or ((g shr 4) shl 4) or (b shr 4)
     }
 }
 

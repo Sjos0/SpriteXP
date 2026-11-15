@@ -82,6 +82,9 @@ data class MainUiState(
     // Conversor Imagem
     val originalBitmap: Bitmap? = null,
     val convertedBitmap: Bitmap? = null,
+    /** Ver matte: mostra o alpha em P/B no lugar da prévia. Não entra no export. */
+    val showMatte: Boolean = false,
+    val matteBitmap: Bitmap? = null,
     val isConverting: Boolean = false,
     val pixelSettings: PixelArtSettings = PixelArtSettings(),
 
@@ -261,12 +264,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 val converted = original?.let { convertOne(it, settings, palette) }
                 val videoSheet = if (convertedFrames.isNotEmpty()) buildVideoSheet(convertedFrames) else null
+                // Matte só para a prévia: não é usado no export, então o cálculo fica restrito a este caso.
+                val matte = if (snapshot.showMatte) {
+                    (original ?: frames.getOrNull(snapshot.currentFrameIndex))
+                        ?.let { convertOne(it, settings, palette, matteView = true) }
+                } else null
 
                 // Ignora resultado de um pedido que já foi substituído.
                 if (version == conversionVersion) {
                     _uiState.update { state ->
                         state.copy(
                             convertedBitmap = converted ?: state.convertedBitmap,
+                            matteBitmap = if (snapshot.showMatte) matte else null,
                             videoFrames = if (convertedFrames.isNotEmpty()) convertedFrames else state.videoFrames,
                             analyzerSheetBitmap = videoSheet?.bitmap ?: state.analyzerSheetBitmap,
                             analyzerColumns = videoSheet?.columns ?: state.analyzerColumns,
@@ -346,7 +355,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private data class VideoSheet(val bitmap: Bitmap, val columns: Int, val rows: Int)
 
-    private suspend fun convertOne(bitmap: Bitmap, settings: PixelArtSettings, palette: List<Int>): Bitmap =
+    private suspend fun convertOne(
+        bitmap: Bitmap,
+        settings: PixelArtSettings,
+        palette: List<Int>,
+        matteView: Boolean = false
+    ): Bitmap =
         converterPipeline.convert(
             source = bitmap,
             targetWidth = settings.targetResolution,
@@ -366,7 +380,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             chromaFeather = settings.chromaFeather,
             chromaDespill = settings.chromaDespill,
             extraChromaColorsInt = settings.extraChromaColors.map { it.toArgb() }.toIntArray(),
-            keyEdgeSoft = settings.keyEdgeMode == io.github.sjos0.spritexp.domain.model.KeyEdgeMode.SOFT
+            keyEdgeSoft = settings.keyEdgeMode == io.github.sjos0.spritexp.domain.model.KeyEdgeMode.SOFT,
+            despillStrength = settings.chromaDespillStrength,
+            matteErode = settings.matteErode,
+            matteDilate = settings.matteDilate,
+            matteView = matteView
         )
 
     /** Chave montada a partir dos ajustes, a mesma que o conversor usa. Null com a chave desligada. */
@@ -925,7 +943,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Quadro convertido na mesma posição da animação. */
     fun currentConvertedFrame(): Bitmap? {
         val s = _uiState.value
+        if (s.showMatte && s.matteBitmap != null) return s.matteBitmap
         return s.videoFrames.getOrNull(s.currentFrameIndex) ?: s.convertedBitmap
+    }
+
+    /** Liga ou desliga a prévia do matte (P/B). Só altera a prévia, nunca o export. */
+    fun toggleShowMatte() {
+        _uiState.update { it.copy(showMatte = !it.showMatte, matteBitmap = null) }
+        requestPixelConversion()
+    }
+
+    /**
+     * Detecta a cor do fundo pelas bordas da imagem atual e ajusta a chave principal.
+     * É só uma sugestão: a tolerância continua sob controle do usuário.
+     */
+    fun detectChromaKeyFromBorder() {
+        val s = _uiState.value
+        val source = s.originalBitmap ?: activeRawFrames(s).getOrNull(s.currentFrameIndex)
+        if (source == null) {
+            showAlert("Importe uma imagem ou vídeo antes de detectar o fundo.")
+            return
+        }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                val w = source.width
+                val h = source.height
+                val px = IntArray(w * h)
+                source.getPixels(px, 0, w, 0, 0, w, h)
+                io.github.sjos0.spritexp.data.pipeline.ChromaKey.dominantBorderColor(px, w, h, ring = 2)
+            }
+            if (result == null) {
+                showAlert("Não encontrei uma cor dominante nas bordas. Use o conta-gotas.")
+                return@launch
+            }
+            val (color, share) = result
+            updatePixelSettings {
+                it.copy(chromaKeyEnabled = true, chromaKeyColor = androidx.compose.ui.graphics.Color(color))
+            }
+            showAlert("Fundo detectado: #%06X (%d%% das bordas). Ajuste a tolerância se precisar.".format(
+                color and 0xFFFFFF,
+                (share * 100).toInt()
+            ))
+        }
     }
 
     private companion object {

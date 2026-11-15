@@ -13,7 +13,14 @@ class RenderOptions(
     val brightness: Float,
     val contrast: Float,
     val edgeEnhance: Float,
-    val ditherModeName: String
+    val ditherModeName: String,
+    /** 0..1: intensidade do despill (só com despill ligado). */
+    val despillStrength: Float = 1f,
+    /** Iterações de erode e dilate no alpha, antes da paleta. */
+    val erode: Int = 0,
+    val dilate: Int = 0,
+    /** true = devolve o matte em cinza (branco = sujeito, preto = removido), sem paleta. */
+    val matteView: Boolean = false
 )
 
 /**
@@ -74,8 +81,8 @@ object PixelArtCore {
             var g = ((color shr 8) and 0xFF).toFloat()
             var b = (color and 0xFF).toFloat()
 
-            if (opts.despill) {
-                val ds = ChromaKey.despill(r, g, b)
+            if (opts.despill && opts.despillStrength > 0f) {
+                val ds = ChromaKey.despill(r, g, b, opts.despillKeyArgb, opts.despillStrength)
                 r = ds[0]; g = ds[1]; b = ds[2]
             }
 
@@ -115,6 +122,17 @@ object PixelArtCore {
                     gBuf[idx] = min(255f, max(0f, gBuf[idx] + edgeG))
                     bBuf[idx] = min(255f, max(0f, bBuf[idx] + edgeB))
                 }
+            }
+        }
+
+        // Refino do matte: erode limpa franjas, dilate fecha buracos. Antes da paleta.
+        if (opts.erode > 0) AlphaMorph.erode(aBuf, w, h, opts.erode)
+        if (opts.dilate > 0) AlphaMorph.dilate(aBuf, rBuf, gBuf, bBuf, w, h, opts.dilate)
+
+        if (opts.matteView) {
+            return IntArray(n) { i ->
+                val a = aBuf[i]
+                (0xFF shl 24) or (a shl 16) or (a shl 8) or a
             }
         }
 

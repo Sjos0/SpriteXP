@@ -70,6 +70,9 @@ class PresetRepository(private val context: Context) {
         put("maxAutoColors", s.maxAutoColors)
         put("keyEdgeMode", s.keyEdgeMode.name)
         put("eyedropRadius", s.eyedropRadius)
+        put("chromaDespillStrength", s.chromaDespillStrength.toDouble())
+        put("matteErode", s.matteErode)
+        put("matteDilate", s.matteDilate)
     }
 
     private fun settingsFromJson(o: JSONObject): PixelArtSettings {
@@ -96,7 +99,10 @@ class PresetRepository(private val context: Context) {
             maxAutoColors = o.optInt("maxAutoColors", d.maxAutoColors),
             // Presets antigos não têm o campo: caem no modo Duro, que é o comportamento de sempre.
             keyEdgeMode = enumOr(o.optString("keyEdgeMode"), d.keyEdgeMode),
-            eyedropRadius = o.optInt("eyedropRadius", d.eyedropRadius).coerceIn(0, 3)
+            eyedropRadius = o.optInt("eyedropRadius", d.eyedropRadius).coerceIn(0, 3),
+            chromaDespillStrength = o.optDouble("chromaDespillStrength", d.chromaDespillStrength.toDouble()).toFloat().coerceIn(0f, 1f),
+            matteErode = o.optInt("matteErode", d.matteErode).coerceIn(0, 2),
+            matteDilate = o.optInt("matteDilate", d.matteDilate).coerceIn(0, 2)
         )
     }
 
