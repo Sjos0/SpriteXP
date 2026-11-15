@@ -54,9 +54,9 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.material3.Icon
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.annotation.DrawableRes
+import androidx.compose.ui.res.imageResource
 import io.github.sjos0.spritexp.R
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.sjos0.spritexp.ui.theme.PixelifyFontFamily
@@ -899,12 +899,13 @@ private fun ToolDock(selected: WorkTab, onSelect: (WorkTab) -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                // PNG pixel art: sem tint, para não recolorir o ícone nem na seleção.
-                Icon(
-                    painter = painterResource(tool.iconRes),
+                // PNG pixel art 32×32 em 32 dp (1 pixel do arquivo = 1 dp), sem tint e com
+                // vizinho mais próximo, para manter os pixels nítidos.
+                Image(
+                    bitmap = ImageBitmap.imageResource(tool.iconRes),
                     contentDescription = tool.label,
-                    tint = Color.Unspecified,
-                    modifier = Modifier.size(22.dp)
+                    filterQuality = FilterQuality.None,
+                    modifier = Modifier.size(32.dp)
                 )
                 Text(
                     text = tool.label,
