@@ -90,5 +90,6 @@ data class PixelArtSettings(
     val palettePreset: PalettePreset = PalettePreset.PICO_8,
     val ditherMode: DitherMode = DitherMode.NONE,
     val maxAutoColors: Int = 16,
-    val keyEdgeMode: KeyEdgeMode = KeyEdgeMode.HARD
+    val keyEdgeMode: KeyEdgeMode = KeyEdgeMode.HARD,
+    val eyedropRadius: Int = 1 // 0..3: 0 = 1 pixel, 1 = bloco 3x3, etc. Amostra a mediana do bloco.
 )

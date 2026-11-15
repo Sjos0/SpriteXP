@@ -113,3 +113,20 @@ class ChromaKeyProTest {
         assertEquals(listOf(argb(200, 30, 30)), PaletteExtractor.extractFor(pixels, 4, spec))
     }
 }
+
+class ChromaSamplerTest {
+
+    private fun argb(r: Int, g: Int, b: Int): Int = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+
+    @Test
+    fun median_ignoresNoisySpike() {
+        // Um pixel ruidoso no meio do bloco não puxa a cor do conta-gotas.
+        val block = intArrayOf(argb(0, 255, 0), argb(0, 254, 0), argb(255, 0, 255), argb(1, 255, 1), argb(0, 255, 0))
+        assertEquals(argb(0, 255, 0), ChromaKey.medianArgb(block))
+    }
+
+    @Test
+    fun median_singlePixelIsItself() {
+        assertEquals(argb(12, 34, 56), ChromaKey.medianArgb(intArrayOf(argb(12, 34, 56))))
+    }
+}

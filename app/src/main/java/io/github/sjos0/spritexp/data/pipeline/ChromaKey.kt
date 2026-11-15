@@ -150,6 +150,20 @@ object ChromaKey {
         )
     }
 
+    /**
+     * Cor do conta-gotas: mediana por canal das amostras do bloco.
+     * A mediana ignora pixels ruins de fundo ruidoso (JPEG, compressão) melhor que a média.
+     */
+    fun medianArgb(samples: IntArray): Int {
+        if (samples.isEmpty()) return 0xFF000000.toInt()
+        val reds = IntArray(samples.size) { (samples[it] shr 16) and 0xFF }
+        val greens = IntArray(samples.size) { (samples[it] shr 8) and 0xFF }
+        val blues = IntArray(samples.size) { samples[it] and 0xFF }
+        reds.sort(); greens.sort(); blues.sort()
+        val mid = samples.size / 2
+        return (0xFF shl 24) or (reds[mid] shl 16) or (greens[mid] shl 8) or blues[mid]
+    }
+
     /** Despill: limita G a max(R,B) quando G é o canal dominante. */
     fun despill(r: Float, g: Float, b: Float): FloatArray {
         val m = max(r, b)

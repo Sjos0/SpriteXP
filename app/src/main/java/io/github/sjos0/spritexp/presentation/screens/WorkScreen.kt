@@ -60,6 +60,8 @@ import androidx.compose.ui.res.imageResource
 import io.github.sjos0.spritexp.R
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.sjos0.spritexp.ui.theme.PixelifyFontFamily
+import io.github.sjos0.spritexp.ui.theme.XpTextBlack
+import kotlin.math.roundToInt
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
@@ -117,6 +119,12 @@ private val LocalWorkColors = staticCompositionLocalOf { DarkWorkColors }
 /** Paleta da tela de trabalho para o tema atual. */
 private val workColors: WorkColors
     @Composable get() = LocalWorkColors.current
+
+/** Destino do próximo toque do conta-gotas: cor principal ou uma das cores extras. */
+private enum class PickTarget { PRIMARY, EXTRA }
+
+/** Máximo de cores extras de fundo (além da principal). */
+private const val MAX_EXTRA_KEYS = 3
 
 private enum class WorkTab(val label: String, @DrawableRes val iconRes: Int) {
     AJUSTES("Ajustes", R.drawable.ic_ajustes),
@@ -180,6 +188,7 @@ fun WorkScreen(
     var tab by remember { mutableStateOf(WorkTab.AJUSTES) }
     var menuOpen by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
+    var pickTarget by remember { mutableStateOf(PickTarget.PRIMARY) }
     var enlargeOpen by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize().background(workColors.background)) {
@@ -224,9 +233,16 @@ fun WorkScreen(
                 convertedFrame = convertedFrame,
                 isConverting = isConverting,
                 picking = picking,
+                eyedropRadius = settings.eyedropRadius,
                 onPickOriginal = { c ->
                     picking = false
-                    onSettingsChange { it.copy(chromaKeyColor = c) }
+                    onSettingsChange { s ->
+                        when {
+                            pickTarget == PickTarget.PRIMARY -> s.copy(chromaKeyColor = c)
+                            s.extraChromaColors.size < MAX_EXTRA_KEYS -> s.copy(extraChromaColors = s.extraChromaColors + c)
+                            else -> s // limite de 3 extras: mantém o que já está
+                        }
+                    }
                 },
                 onEnlarge = { enlargeOpen = true },
                 onImportMedia = onPickMedia
@@ -259,7 +275,9 @@ fun WorkScreen(
                         settings = settings,
                         onSettingsChange = onSettingsChange,
                         picking = picking,
-                        onTogglePicking = { picking = !picking }
+                        onTogglePicking = { picking = !picking },
+                        pickTarget = pickTarget,
+                        onPickTargetChange = { pickTarget = it }
                     )
                     PresetsSection(
                         presets = presets,
@@ -647,6 +665,7 @@ private fun Preview(
     convertedFrame: Bitmap?,
     isConverting: Boolean,
     picking: Boolean,
+    eyedropRadius: Int,
     onPickOriginal: (Color) -> Unit,
     onEnlarge: () -> Unit,
     onImportMedia: () -> Unit
@@ -660,6 +679,7 @@ private fun Preview(
             bitmap = originalFrame,
             loading = false,
             picking = picking,
+            eyedropRadius = eyedropRadius,
             onPick = onPickOriginal,
             onImportClick = onImportMedia,
             modifier = Modifier.weight(1f)
@@ -693,6 +713,7 @@ private fun PreviewPanel(
     bitmap: Bitmap?,
     loading: Boolean,
     picking: Boolean,
+    eyedropRadius: Int = 0,
     onPick: ((Color) -> Unit)?,
     onImportClick: (() -> Unit)? = null,
     modifier: Modifier
@@ -709,7 +730,7 @@ private fun PreviewPanel(
         val tapModifier = if (picking && onPick != null && bitmap != null) {
             Modifier.pointerInput(bitmap) {
                 detectTapGestures { offset ->
-                    val pickedColor = pixelAt(bitmap, offset, boxSize)
+                    val pickedColor = pixelAt(bitmap, offset, boxSize, eyedropRadius)
                     if (pickedColor != null) onPick(pickedColor)
                 }
             }
@@ -761,7 +782,7 @@ private fun PreviewPanel(
  * Converte o toque na caixa da prévia para a coordenada do bitmap (ContentScale.Fit, centralizado)
  * e devolve a cor do pixel. Retorna null se o toque cair fora da imagem.
  */
-private fun pixelAt(bitmap: Bitmap, offset: Offset, box: IntSize): Color? {
+private fun pixelAt(bitmap: Bitmap, offset: Offset, box: IntSize, radius: Int): Color? {
     if (box.width == 0 || box.height == 0) return null
     val bw = bitmap.width.toFloat()
     val bh = bitmap.height.toFloat()
@@ -771,7 +792,17 @@ private fun pixelAt(bitmap: Bitmap, offset: Offset, box: IntSize): Color? {
     val px = ((offset.x - offX) / scale).toInt()
     val py = ((offset.y - offY) / scale).toInt()
     if (px !in 0 until bitmap.width || py !in 0 until bitmap.height) return null
-    return Color(bitmap.getPixel(px, py))
+    // Conta-gotas com raio: mediana do bloco (px ± raio), sem sair da imagem.
+    val r = radius.coerceIn(0, 3)
+    val samples = ArrayList<Int>()
+    for (dy in -r..r) {
+        for (dx in -r..r) {
+            val x = (px + dx).coerceIn(0, bitmap.width - 1)
+            val y = (py + dy).coerceIn(0, bitmap.height - 1)
+            samples.add(bitmap.getPixel(x, y))
+        }
+    }
+    return Color(io.github.sjos0.spritexp.data.pipeline.ChromaKey.medianArgb(samples.toIntArray()))
 }
 
 @Composable
@@ -927,8 +958,11 @@ private fun AdjustmentsPanel(
     settings: PixelArtSettings,
     onSettingsChange: ((PixelArtSettings) -> PixelArtSettings) -> Unit,
     picking: Boolean,
-    onTogglePicking: () -> Unit
+    onTogglePicking: () -> Unit,
+    pickTarget: PickTarget,
+    onPickTargetChange: (PickTarget) -> Unit
 ) {
+    val extrasFull = settings.extraChromaColors.size >= MAX_EXTRA_KEYS
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         XpCollapsibleGroupBox(title = "Remoção de fundo") {
             Row(
@@ -950,10 +984,71 @@ private fun AdjustmentsPanel(
                     testTag = "work_eyedropper"
                 )
             }
-            Text(fontFamily = PixelifyFontFamily, 
+            // Destino do próximo toque: cor principal ou uma cor extra (até 3).
+            XpRadioButton(
+                selected = pickTarget == PickTarget.PRIMARY,
+                onClick = { onPickTargetChange(PickTarget.PRIMARY) },
+                label = "Conta-gotas define a cor principal"
+            )
+            XpRadioButton(
+                selected = pickTarget == PickTarget.EXTRA,
+                onClick = { onPickTargetChange(PickTarget.EXTRA) },
+                label = if (extrasFull) "Cor extra (limite de 3 atingido)" else "Conta-gotas adiciona uma cor extra"
+            )
+            Text(fontFamily = PixelifyFontFamily,
                 text = if (picking) "Toque na imagem ORIGINAL no pixel do fundo." else "Escolha a cor do fundo tocando na imagem.",
                 color = HintOnLight,
                 fontSize = 11.sp
+            )
+            Text(fontFamily = PixelifyFontFamily,
+                text = "Cores extras de fundo (até 3)",
+                color = XpTextBlack,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
+            if (settings.extraChromaColors.isEmpty()) {
+                Text(fontFamily = PixelifyFontFamily,
+                    text = "Nenhuma cor extra. Use o conta-gotas com o destino 'adiciona'.",
+                    color = HintOnLight,
+                    fontSize = 11.sp
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    settings.extraChromaColors.forEachIndexed { index, color ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .background(color)
+                                    .border(2.dp, Color.Black)
+                            )
+                            Text(fontFamily = PixelifyFontFamily,
+                                text = "[x]",
+                                color = XpTextBlack,
+                                fontSize = 12.sp,
+                                modifier = Modifier.clickable {
+                                    onSettingsChange { s ->
+                                        s.copy(extraChromaColors = s.extraChromaColors.filterIndexed { i, _ -> i != index })
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            XpSlider(
+                label = "Raio do conta-gotas",
+                value = settings.eyedropRadius.toFloat(),
+                onValueChange = { v -> onSettingsChange { it.copy(eyedropRadius = v.roundToInt().coerceIn(0, 3)) } },
+                valueRange = 0f..3f,
+                displayFormatter = { val r = it.roundToInt(); "${2 * r + 1}x${2 * r + 1}" }
             )
             XpRadioButton(
                 selected = settings.chromaKeyEnabled,
@@ -967,6 +1062,14 @@ private fun AdjustmentsPanel(
                     label = "Modo ${m.displayName}"
                 )
             }
+            Text(fontFamily = PixelifyFontFamily,
+                text = if (settings.chromaMode == ChromaMode.DISTANCE)
+                    "Tolerância em % da diferença de cor entre o pixel e a chave."
+                else
+                    "Tolerância em graus de matiz: quanto o tom pode se afastar da chave.",
+                color = HintOnLight,
+                fontSize = 11.sp
+            )
             if (settings.chromaMode == ChromaMode.DISTANCE) {
                 XpSlider(
                     label = "Tolerância",
