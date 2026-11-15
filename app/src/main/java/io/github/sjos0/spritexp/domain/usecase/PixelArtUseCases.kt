@@ -21,7 +21,8 @@ interface PixelArtConverterUseCase {
         chromaValMin: Float = 0.12f,
         chromaFeather: Float = 0f,
         chromaDespill: Boolean = false,
-        extraChromaColorsInt: IntArray = intArrayOf()
+        extraChromaColorsInt: IntArray = intArrayOf(),
+        keyEdgeSoft: Boolean = false
     ): Bitmap
 }
 

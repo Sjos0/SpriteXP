@@ -72,6 +72,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.sjos0.spritexp.domain.model.ChromaMode
+import io.github.sjos0.spritexp.domain.model.KeyEdgeMode
 import io.github.sjos0.spritexp.domain.model.DitherMode
 import io.github.sjos0.spritexp.domain.model.PalettePreset
 import io.github.sjos0.spritexp.domain.model.PixelArtSettings
@@ -997,13 +998,23 @@ private fun AdjustmentsPanel(
                     displayFormatter = { "%.2f".format(it) }
                 )
             }
-            XpSlider(
-                label = "Suavização da borda",
-                value = settings.chromaFeather,
-                onValueChange = { v -> onSettingsChange { it.copy(chromaFeather = v) } },
-                valueRange = 0f..30f,
-                displayFormatter = { "${it.toInt()}" }
-            )
+            // Modo Duro: borda 0 ou 255. O feather só existe no modo Suave.
+            KeyEdgeMode.values().forEach { m ->
+                XpRadioButton(
+                    selected = settings.keyEdgeMode == m,
+                    onClick = { onSettingsChange { it.copy(keyEdgeMode = m) } },
+                    label = "Borda ${m.displayName}"
+                )
+            }
+            if (settings.keyEdgeMode == KeyEdgeMode.SOFT) {
+                XpSlider(
+                    label = "Suavização da borda",
+                    value = settings.chromaFeather,
+                    onValueChange = { v -> onSettingsChange { it.copy(chromaFeather = v) } },
+                    valueRange = 0f..30f,
+                    displayFormatter = { "${it.toInt()}" }
+                )
+            }
             XpRadioButton(
                 selected = settings.chromaDespill,
                 onClick = { onSettingsChange { it.copy(chromaDespill = !it.chromaDespill) } },

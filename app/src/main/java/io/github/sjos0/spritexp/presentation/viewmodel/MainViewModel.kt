@@ -365,7 +365,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             chromaValMin = settings.chromaValMin,
             chromaFeather = settings.chromaFeather,
             chromaDespill = settings.chromaDespill,
-            extraChromaColorsInt = settings.extraChromaColors.map { it.toArgb() }.toIntArray()
+            extraChromaColorsInt = settings.extraChromaColors.map { it.toArgb() }.toIntArray(),
+            keyEdgeSoft = settings.keyEdgeMode == io.github.sjos0.spritexp.domain.model.KeyEdgeMode.SOFT
+        )
+
+    /** Chave montada a partir dos ajustes, a mesma que o conversor usa. Null com a chave desligada. */
+    private fun chromaSpecFor(settings: PixelArtSettings): io.github.sjos0.spritexp.data.pipeline.ChromaSpec? =
+        io.github.sjos0.spritexp.data.pipeline.ChromaKey.specFor(
+            enabled = settings.chromaKeyEnabled,
+            keyArgb = settings.chromaKeyColor.toArgb(),
+            extraKeyArgb = settings.extraChromaColors.map { it.toArgb() }.toIntArray(),
+            modeDistance = settings.chromaMode == io.github.sjos0.spritexp.domain.model.ChromaMode.DISTANCE,
+            distanceTolerance = settings.chromaTolerance,
+            hueTolerance = settings.chromaHueTolerance,
+            satMin = settings.chromaSatMin,
+            valMin = settings.chromaValMin,
+            feather = settings.chromaFeather,
+            softEdges = settings.keyEdgeMode == io.github.sjos0.spritexp.domain.model.KeyEdgeMode.SOFT
         )
 
     /** Paleta predefinida, ou extraída da própria imagem no modo Auto. */
@@ -380,8 +396,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val scaled = Bitmap.createScaledBitmap(source, res, res, false)
             val pixels = IntArray(res * res)
             scaled.getPixels(pixels, 0, res, 0, 0, res, res)
-            val key = if (settings.chromaKeyEnabled) settings.chromaKeyColor.toArgb() else null
-            val colors = PaletteExtractor.extract(pixels, settings.maxAutoColors, key, settings.chromaTolerance)
+            // Mesma chave do conversor: a paleta automática ignora exatamente o que a prévia remove.
+            val colors = PaletteExtractor.extractFor(pixels, settings.maxAutoColors, chromaSpecFor(settings))
             colors.ifEmpty { listOf(android.graphics.Color.BLACK) }
         }
     }

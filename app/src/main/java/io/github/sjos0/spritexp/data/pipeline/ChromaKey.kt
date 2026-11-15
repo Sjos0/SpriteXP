@@ -120,9 +120,69 @@ object ChromaKey {
             distanceTolerance, hueTolerance, satMin, valMin, feather = 0f
         ) == 0
 
+    /**
+     * Monta a chave a partir dos ajustes. Retorna null quando a chave está desligada.
+     * Modo Duro ignora o feather: a borda fica exatamente no limite de tolerância (alpha 0 ou 255).
+     * Modo Suave usa o feather para alpha intermediário na borda.
+     */
+    fun specFor(
+        enabled: Boolean,
+        keyArgb: Int,
+        extraKeyArgb: IntArray,
+        modeDistance: Boolean,
+        distanceTolerance: Float,
+        hueTolerance: Float,
+        satMin: Float,
+        valMin: Float,
+        feather: Float,
+        softEdges: Boolean
+    ): ChromaSpec? {
+        if (!enabled) return null
+        return ChromaSpec(
+            keyArgb = keyArgb,
+            extraKeyArgb = extraKeyArgb,
+            modeDistance = modeDistance,
+            distanceTolerance = distanceTolerance,
+            hueTolerance = hueTolerance,
+            satMin = satMin,
+            valMin = valMin,
+            feather = if (softEdges) feather else 0f
+        )
+    }
+
     /** Despill: limita G a max(R,B) quando G é o canal dominante. */
     fun despill(r: Float, g: Float, b: Float): FloatArray {
         val m = max(r, b)
         return if (g > m) floatArrayOf(r, m, b) else floatArrayOf(r, g, b)
     }
+}
+
+/**
+ * Configuração da chave, usada igual pelo conversor e pelo extrator de paleta.
+ * Um pixel é considerado fundo quando [alphaOf] fica abaixo de 128 (decisão dura).
+ */
+class ChromaSpec(
+    val keyArgb: Int,
+    val extraKeyArgb: IntArray = IntArray(0),
+    val modeDistance: Boolean = true,
+    val distanceTolerance: Float = 35f,
+    val hueTolerance: Float = 25f,
+    val satMin: Float = 0.35f,
+    val valMin: Float = 0.12f,
+    val feather: Float = 0f
+) {
+    /** Alpha de chave do pixel: 0 = fundo, 255 = manter, intermediário = borda (só com feather). */
+    fun alphaOf(argb: Int): Int = ChromaKey.keyedAlpha(
+        argb = argb,
+        keyArgb = keyArgb,
+        extraKeyArgb = extraKeyArgb,
+        modeDistance = modeDistance,
+        distanceTolerance = distanceTolerance,
+        hueTolerance = hueTolerance,
+        satMin = satMin,
+        valMin = valMin,
+        feather = feather
+    )
+
+    fun isKeyed(argb: Int): Boolean = alphaOf(argb) < 128
 }
